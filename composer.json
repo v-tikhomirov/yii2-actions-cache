@@ -1,0 +1,32 @@
+{
+    "name": "v-tikhomirov/yii2-actions-cache",
+    "description": "Пакет добавляет возможность кеширования action в контроллерах",
+    "type": "library",
+    "autoload": {
+        "psr-4": {
+            "Tikhomirov\\Yii2ActionsCache\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "V Tikhomirov",
+            "email": "job.tikhomirov@gmail.com"
+        }
+    ],
+    "require": {
+        "php": ">=7.4",
+        "ext-json": "*",
+        "yiisoft/yii2": "^2.0"
+    },
+    "config": {
+        "fxp-asset": {
+            "enabled": false
+        }
+    },
+    "repositories": [
+        {
+            "type": "composer",
+            "url": "https://asset-packagist.org"
+        }
+    ]
+}
