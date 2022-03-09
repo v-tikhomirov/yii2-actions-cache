@@ -3,16 +3,28 @@
 namespace Tikhomirov\Yii2ActionsCache;
 
 use Exception;
+use Tikhomirov\Yii2ActionsCache\exceptions\InvalidActionCacheConfigException;
+use Tikhomirov\Yii2ActionsCache\exceptions\CacheableControllerException;
 use Yii;
 use yii\base\InvalidRouteException;
 use yii\helpers\ArrayHelper;
 
+/**
+ * @method array getCacheableActions()
+ * @see CacheableControllerInterface::getCacheableActions()
+ */
 trait CacheableControllerTrait
 {
-    private static string $cacheKeyTemplate = 'action_%s_%s_%s';
     private static int $defaultCacheDuration = 7200; // 2 часа
+    private static string $cacheKeyTemplate = 'action_%s_%s_%s';
+    private static string $invalidDependenciesMessageTemplate = 'Неверная конфигурация зависимостей кеширования для %s';
+    private static string $invalidDurationMessageTemplate = 'Неверная конфигурация длительности кеширования для %s';
+    private static string $invalidDependencyMessageTemplate = 'Зависимость %s не определена';
 
     /**
+     * @throws CacheableControllerException
+     * @throws InvalidActionCacheConfigException
+     * @throws InvalidRouteException
      * @throws Exception
      */
     public function runAction($id, $params = [])
@@ -29,32 +41,36 @@ trait CacheableControllerTrait
         }, $this->getDuration($id));
     }
 
-    private function getCacheDuration(): int
+    private function canCacheAction(string $action): bool
     {
-        if (!method_exists($this, 'getCacheDurationInSeconds')) {
-            return self::$defaultCacheDuration;
-        }
-
-        return $this->getCacheDurationInSeconds();
+        return array_key_exists($action, $this->getCacheableActions());
     }
 
     /**
+     * @throws InvalidActionCacheConfigException
+     */
+    private function getDuration(string $action): int
+    {
+        $key = $action . '.' . CacheableControllerInterface::ATTRIBUTE_DURATION;
+        $result = ArrayHelper::getValue($this->getCacheableActions(), $key, self::$defaultCacheDuration);
+        if (!is_int($result)) {
+            $message = sprintf(self::$invalidDurationMessageTemplate, $action);
+            throw new InvalidActionCacheConfigException($message);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @throws CacheableControllerException
+     * @throws InvalidActionCacheConfigException
      * @throws Exception
      */
-    private function getCacheKey(string $action): ?string
+    private function getCacheKey(string $action): string
     {
-        if (!method_exists($this, 'getActionsDependencies')) {
-            return null;
-        }
-
-        $dependencies = ArrayHelper::getValue($this->getActionsDependencies(), $action);
-        if (!is_array($dependencies)) {
-            return null;
-        }
-
         $dependenciesData = array_map(function (string $dependency) {
             return $this->getDependencyData($dependency);
-        }, $dependencies);
+        }, $this->getDependencies($action));
 
         $key = sprintf(
             self::$cacheKeyTemplate,
@@ -66,7 +82,23 @@ trait CacheableControllerTrait
     }
 
     /**
-     * @throws Exception
+     * @return string[]
+     * @throws InvalidActionCacheConfigException
+     */
+    private function getDependencies(string $action): array
+    {
+        $key = $action . '.' . CacheableControllerInterface::ATTRIBUTE_DEPENDENCIES;
+        $result = ArrayHelper::getValue($this->getCacheableActions(), $key, []);
+        if (!is_array($result)) {
+            $message = sprintf(self::$invalidDependenciesMessageTemplate, $action);
+            throw new InvalidActionCacheConfigException($message);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @throws CacheableControllerException
      */
     private function getDependencyData(string $dependency): string
     {
@@ -78,7 +110,8 @@ trait CacheableControllerTrait
             case CacheableControllerInterface::DEPENDENCY_POST:
                 return $this->getPostDependencyData();
             default:
-                throw new Exception("Зависимость {$dependency} не определена");
+                $message = sprintf(self::$invalidDependencyMessageTemplate, $dependency);
+                throw new CacheableControllerException($message);
         }
     }
 
